@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Planificación SAINTS • Ministerio de Adolescentes</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class', theme: { extend: {} } }</script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { background: white !important; color: black !important; }
+      .printable-area { display: block !important; }
+      .no-print-area { display: none !important; }
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    @keyframes loading-bar {
+      0% { width: 0%; margin-left: 0%; }
+      50% { width: 70%; margin-left: 15%; }
+      100% { width: 0%; margin-left: 100%; }
+    }
+    .animate-loading-bar { animation: loading-bar 2s ease-in-out infinite; }
+    @keyframes fade-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-fade-in { animation: fade-in 0.5s ease-in-out; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans selection:bg-pink-500 selection:text-white transition-colors duration-300">
+  <div id="root"></div>
+  <div id="error-boundary" class="hidden fixed inset-0 bg-red-950 text-red-200 p-8 z-50 overflow-auto">
+    <h1 class="text-2xl font-bold mb-4">⚠️ Error Detectado</h1>
+    <pre id="error-message" class="bg-black p-4 rounded text-sm text-red-400 whitespace-pre-wrap"></pre>
+    <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-red-600 text-white rounded">Recargar</button>
+  </div>
+
+  <script type="text/babel">
+    window.onerror = function(message, source, lineno, colno, error) {
+      console.error("ERROR GLOBAL:", message, error);
+      const errorDiv = document.getElementById('error-boundary');
+      const errorMsg = document.getElementById('error-message');
+      if (errorDiv && errorMsg) {
+        errorDiv.classList.remove('hidden');
+        errorMsg.textContent = `Mensaje: ${message}\nLínea: ${lineno}\nDetalle: ${error ? error.stack : 'Sin detalle'}`;
+      }
+      return true;
+    };
+
+    const { useState, useEffect } = React;
+
+    // ⚠️ PEGA AQUÍ TU URL DE GOOGLE APPS SCRIPT (debe terminar en /exec)
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyzDB4BlOChL7ba_zkzQu5cZGUQlgSqGfxkV5Y4u6lb7Mm9ZJeyOy3ZgWb1FxM9NfR8/exec";
+    const ADMIN_TOKEN = "adminpro";
+
+    // --- ICONOS ---
+    const Icon = ({ children, className = "w-4 h-4" }) => (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>);
+    const Sparkles = ({ className }) => <Icon className={className}><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></Icon>;
+    const Calendar = ({ className }) => <Icon className={className}><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></Icon>;
+    const CalendarDays = ({ className }) => <Icon className={className}><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></Icon>;
+    const Plus = ({ className }) => <Icon className={className}><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></Icon>;
+    const Trash2 = ({ className }) => <Icon className={className}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></Icon>;
+    const Edit3 = ({ className }) => <Icon className={className}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></Icon>;
+    const Music = ({ className }) => <Icon className={className}><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></Icon>;
+    const Gamepad2 = ({ className }) => <Icon className={className}><line x1="6" x2="10" y1="11" y2="11"/><line x1="8" x2="8" y1="9" y2="13"/><line x1="15" x2="15.01" y1="12" y2="12"/><line x1="18" x2="18.01" y1="10" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/></Icon>;
+    const BookOpen = ({ className }) => <Icon className={className}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></Icon>;
+    const Coffee = ({ className }) => <Icon className={className}><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" x2="6" y1="2" y2="4"/><line x1="10" x2="10" y1="2" y2="4"/><line x1="14" x2="14" y1="2" y2="4"/></Icon>;
+    const Printer = ({ className }) => <Icon className={className}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></Icon>;
+    const Target = ({ className }) => <Icon className={className}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></Icon>;
+    const Layers = ({ className }) => <Icon className={className}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></Icon>;
+    const Zap = ({ className }) => <Icon className={className}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></Icon>;
+    const Search = ({ className }) => <Icon className={className}><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/></Icon>;
+    const LayoutDashboard = ({ className }) => <Icon className={className}><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></Icon>;
+    const ChevronRight = ({ className }) => <Icon className={className}><polyline points="9 18 15 12 9 6"/></Icon>;
+    const Mail = ({ className }) => <Icon className={className}><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></Icon>;
+    const Sun = ({ className }) => <Icon className={className}><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></Icon>;
+    const Moon = ({ className }) => <Icon className={className}><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></Icon>;
+    const X = ({ className }) => <Icon className={className}><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></Icon>;
+    const Lock = ({ className }) => <Icon className={className}><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></Icon>;
+    const User = ({ className }) => <Icon className={className}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></Icon>;
+    const Clock = ({ className }) => <Icon className={className}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></Icon>;
+
+    function LoadingMessages() {
+      const [messageIndex, setMessageIndex] = useState(0);
+      const messages = ["Obteniendo datos del servidor...", "Sincronizando programaciones...", "Preparando el dashboard...", "Casi listo...", "Conectando con Google Sheets..."];
+      useEffect(() => {
+        const interval = setInterval(() => setMessageIndex((prev) => (prev + 1) % messages.length), 2000);
+        return () => clearInterval(interval);
+      }, []);
+      return <span className="animate-fade-in" key={messageIndex}>{messages[messageIndex]}</span>;
+    }
+
+    function App() {
+      const [userRole, setUserRole] = useState(null);
+      const [loginPassword, setLoginPassword] = useState('');
+      const [loginError, setLoginError] = useState('');
+      const [items, setItems] = useState([]);
+      const [isLoading, setIsLoading] = useState(false);
+      const [connectionError, setConnectionError] = useState(false);
+      const [activeTab, setActiveTab] = useState('dashboard');
+      const [selectedYear, setSelectedYear] = useState('2026');
+      const [selectedQuarter, setSelectedQuarter] = useState('Todos');
+      const [selectedType, setSelectedType] = useState('Todos');
+      const [searchTerm, setSearchTerm] = useState('');
+      const [darkMode, setDarkMode] = useState(true);
+      const [isModalOpen, setIsModalOpen] = useState(false);
+      const [editingItem, setEditingItem] = useState(null);
+      const [selectedSaturdayItem, setSelectedSaturdayItem] = useState(null);
+      const [isPrintView, setIsPrintView] = useState(false);
+      const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+      const [emailRecipients, setEmailRecipients] = useState('');
+      const [sendingEmail, setSendingEmail] = useState(false);
+
+      const [formData, setFormData] = useState({
+        title: '', type: 'Servicio', date: '2026-03-07', year: '2026', quarter: 'Q1',
+        objective: '', leader: '', details: '',
+        saturdayProgram: {
+          worship: { title: 'Alabanza & Adoración', leader: '', duration: '20 min', details: '' },
+          icebreaker: { title: 'Dinámica Divertida', leader: '', duration: '15 min', details: '' },
+          message: { title: 'Mensaje Principal', speaker: '', duration: '30 min', details: '' },
+          snack: { title: 'Tiempo de Compartir', team: '', duration: '20 min', details: '' }
+        }
+      });
+
+      const isConfigured = SCRIPT_URL && SCRIPT_URL.startsWith("https://script.google.com");
+
+      useEffect(() => {
+        if (darkMode) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+      }, [darkMode]);
+
+      const handleLogin = (role) => {
+        if (role === 'admin') {
+          if (loginPassword === ADMIN_TOKEN) { setUserRole('admin'); setLoginError(''); }
+          else { setLoginError('Clave incorrecta. Usa: adminpro'); }
+        } else { setUserRole('guest'); setLoginError(''); }
+      };
+
+      const loadFromSheets = async () => {
+        setIsLoading(true);
+        setConnectionError(false);
+        if (!isConfigured) { setConnectionError(true); setIsLoading(false); return; }
+
+        const cached = localStorage.getItem('saints_cache');
+        if (cached) {
+          try { const { data } = JSON.parse(cached); setItems(data); } catch (e) { console.warn("Caché inválido"); }
+        }
+
+        try {
+          const res = await fetch(SCRIPT_URL, { cache: 'no-store' });
+          if (!res.ok) throw new Error("Error de red");
+          const data = await res.json();
+          if (data.error) throw new Error(data.error);
+          const sortedItems = Array.isArray(data) ? data.sort((a, b) => new Date(a.date) - new Date(b.date)) : [];
+          setItems(sortedItems);
+          localStorage.setItem('saints_cache', JSON.stringify({ data: sortedItems, timestamp: Date.now() }));
+        } catch (err) {
+          console.error("Error cargando datos:", err);
+          if (!cached) setConnectionError(true);
+        } finally { setIsLoading(false); }
+      };
+
+      useEffect(() => { if (userRole) loadFromSheets(); }, [userRole]);
+
+      const getQuarterFromDate = (dateStr) => {
+        if (!dateStr) return 'Q1';
+        const month = new Date(dateStr).getMonth() + 1;
+        if (month <= 3) return 'Q1'; if (month <= 6) return 'Q2'; if (month <= 9) return 'Q3'; return 'Q4';
+      };
+
+      // 🖨️ FUNCIÓN DE IMPRESIÓN / GUARDAR COMO PDF
+      const handlePrint = () => {
+        const printWindow = window.open('', '_blank', 'width=900,height=700');
+        if (!printWindow) { alert("Por favor permite las ventanas emergentes para imprimir"); return; }
+
+        const htmlContent = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Planificación SAINTS - ${selectedYear}</title>
+            <style>
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; color: #1e293b; background: white; }
+              .header { text-align: center; border-bottom: 3px solid #7e22ce; padding-bottom: 20px; margin-bottom: 30px; }
+              .header h1 { font-size: 32px; color: #7e22ce; margin-bottom: 8px; }
+              .header p { color: #64748b; font-size: 14px; }
+              .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px; }
+              .stat-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 15px; text-align: center; }
+              .stat-card .label { font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600; }
+              .stat-card .value { font-size: 28px; font-weight: 900; color: #1e293b; margin: 8px 0; }
+              .event { border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 20px; page-break-inside: avoid; }
+              .event-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0; }
+              .event-title { font-size: 20px; font-weight: 800; color: #1e293b; margin-top: 8px; }
+              .event-date { font-size: 12px; color: #64748b; font-weight: 600; text-align: right; }
+              .badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; margin-right: 8px; }
+              .badge-servicio { background: #f3e8ff; color: #7e22ce; }
+              .badge-actividad { background: #cffafe; color: #0891b2; }
+              .badge-evento { background: #fce7f3; color: #db2777; }
+              .objective { background: #faf5ff; border-left: 4px solid #7e22ce; padding: 12px; margin: 12px 0; border-radius: 6px; font-size: 13px; color: #4c1d95; }
+              .program-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 15px; }
+              .program-block { border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; }
+              .program-block h5 { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+              .program-block p { font-size: 12px; color: #475569; }
+              .program-block .meta { font-size: 11px; color: #64748b; margin-top: 6px; }
+              .footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; }
+              @media print { body { padding: 20px; } .event { break-inside: avoid; } }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>🌟 Planificación SAINTS ${selectedYear}</h1>
+              <p>Ministerio de Adolescentes • Cronograma Oficial</p>
+            </div>
+            <div class="stats">
+              <div class="stat-card"><div class="label">Total Programaciones</div><div class="value">${filteredItems.length}</div></div>
+              <div class="stat-card"><div class="label">Servicios de Sábado</div><div class="value">${saturdaysList.length}</div></div>
+              <div class="stat-card"><div class="label">Eventos Especiales</div><div class="value">${filteredItems.filter(i => i.type === 'Evento Especial').length}</div></div>
+              <div class="stat-card"><div class="label">Actividades</div><div class="value">${filteredItems.filter(i => i.type === 'Actividad').length}</div></div>
+            </div>
+            ${filteredItems.map(item => {
+              const badgeClass = item.type === 'Servicio' ? 'badge-servicio' : item.type === 'Actividad' ? 'badge-actividad' : 'badge-evento';
+              const prog = item.saturdayProgram || {};
+              return `
+                <div class="event">
+                  <div class="event-header">
+                    <div>
+                      <span class="badge ${badgeClass}">${item.type}</span>
+                      <span class="badge" style="background:#f1f5f9;color:#475569;">${item.quarter}</span>
+                      <div class="event-title">${item.title}</div>
+                    </div>
+                    <div class="event-date">${item.date}<br/>Líder: ${item.leader || 'Por asignar'}</div>
+                  </div>
+                  ${item.objective ? `<div class="objective"><strong>🎯 Objetivo:</strong> ${item.objective}</div>` : ''}
+                  ${item.type === 'Servicio' ? `
+                    <div class="program-grid">
+                      <div class="program-block" style="border-left:3px solid #a855f7;">
+                        <h5 style="color:#7e22ce;">🎶 Alabanzas (${prog.worship?.duration || '20 min'})</h5>
+                        <p><strong>${prog.worship?.title || '-'}</strong></p>
+                        <p>${prog.worship?.details || ''}</p>
+                        <div class="meta">Líder: ${prog.worship?.leader || '-'}</div>
+                      </div>
+                      <div class="program-block" style="border-left:3px solid #06b6d4;">
+                        <h5 style="color:#0891b2;">🎮 Dinámica (${prog.icebreaker?.duration || '15 min'})</h5>
+                        <p><strong>${prog.icebreaker?.title || '-'}</strong></p>
+                        <p>${prog.icebreaker?.details || ''}</p>
+                        <div class="meta">Encargado: ${prog.icebreaker?.leader || '-'}</div>
+                      </div>
+                      <div class="program-block" style="border-left:3px solid #10b981;">
+                        <h5 style="color:#059669;">📖 Mensaje (${prog.message?.duration || '30 min'})</h5>
+                        <p><strong>${prog.message?.title || '-'}</strong></p>
+                        <p>${prog.message?.details || ''}</p>
+                        <div class="meta">Predicador: ${prog.message?.speaker || '-'}</div>
+                      </div>
+                      <div class="program-block" style="border-left:3px solid #f59e0b;">
+                        <h5 style="color:#d97706;">☕ Compartir (${prog.snack?.duration || '20 min'})</h5>
+                        <p><strong>${prog.snack?.title || '-'}</strong></p>
+                        <p>${prog.snack?.details || ''}</p>
+                        <div class="meta">Equipo: ${prog.snack?.team || '-'}</div>
+                      </div>
+                    </div>
+                  ` : `<p style="font-size:13px;color:#475569;margin-top:10px;">${item.details || ''}</p>`}
+                </div>
+              `;
+            }).join('')}
+            <div class="footer">Documento generado el ${new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })} • Planificación SAINTS</div>
+            <script>window.onload = function() { setTimeout(() => window.print(), 500); }<\/script>
+          </body>
+          </html>
+        `;
+
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+      };
+
+      const openNewItemModal = (defaultType = 'Servicio') => {
+        setEditingItem(null);
+        setFormData({
+          title: '', type: defaultType, date: `${selectedYear}-03-07`, year: selectedYear,
+          quarter: getQuarterFromDate(`${selectedYear}-03-07`), objective: '', leader: '', details: '',
+          saturdayProgram: {
+            worship: { title: 'Alabanza & Adoración', leader: '', duration: '20 min', details: '' },
+            icebreaker: { title: 'Dinámica Divertida', leader: '', duration: '15 min', details: '' },
+            message: { title: 'Mensaje Principal', speaker: '', duration: '30 min', details: '' },
+            snack: { title: 'Tiempo de Compartir', team: '', duration: '20 min', details: '' }
+          }
+        });
+        setIsModalOpen(true);
+      };
+
+      const openEditModal = (item) => {
+        setEditingItem(item);
+        setFormData({
+          title: item.title || '', type: item.type || 'Servicio', date: item.date || '',
+          year: item.year || '2026', quarter: item.quarter || getQuarterFromDate(item.date),
+          objective: item.objective || '', leader: item.leader || '', details: item.details || '',
+          saturdayProgram: item.saturdayProgram || {
+            worship: { title: '', leader: '', duration: '20 min', details: '' },
+            icebreaker: { title: '', leader: '', duration: '15 min', details: '' },
+            message: { title: '', speaker: '', duration: '30 min', details: '' },
+            snack: { title: '', team: '', duration: '20 min', details: '' }
+          }
+        });
+        setIsModalOpen(true);
+      };
+
+      const handleSaveItem = async (e) => {
+        e.preventDefault();
+        const calculatedYear = formData.date ? formData.date.split('-')[0] : '2026';
+        const calculatedQuarter = getQuarterFromDate(formData.date);
+        const newItem = { ...formData, id: editingItem ? editingItem.id : ("evt-" + Date.now()), year: calculatedYear, quarter: calculatedQuarter };
+        const updatedList = editingItem ? items.map(i => i.id === editingItem.id ? newItem : i) : [...items, newItem];
+        updatedList.sort((a, b) => new Date(a.date) - new Date(b.date));
+        setItems(updatedList);
+        setIsModalOpen(false);
+        try {
+          await fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify({ action: editingItem ? "update" : "create", item: newItem, token: ADMIN_TOKEN }) });
+          localStorage.setItem('saints_cache', JSON.stringify({ data: updatedList, timestamp: Date.now() }));
+        } catch (err) { alert("Error al guardar en Google Sheets"); }
+      };
+
+      const handleDeleteItem = async (id) => {
+        if (!confirm("¿Estás seguro de eliminar este elemento?")) return;
+        const updatedList = items.filter(i => i.id !== id);
+        setItems(updatedList);
+        if (selectedSaturdayItem?.id === id) setSelectedSaturdayItem(null);
+        try {
+          await fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify({ action: "delete", id, token: ADMIN_TOKEN }) });
+          localStorage.setItem('saints_cache', JSON.stringify({ data: updatedList, timestamp: Date.now() }));
+        } catch (err) { alert("Error al eliminar en Google Sheets"); }
+      };
+
+      const handleSendEmail = async (e) => {
+        e.preventDefault();
+        const currentSat = selectedSaturdayItem || saturdaysList[0];
+        if (!currentSat || !emailRecipients.trim()) return;
+        setSendingEmail(true);
+        try {
+          const res = await fetch(SCRIPT_URL, { method: "POST", body: JSON.stringify({ action: "send_email", recipients: emailRecipients.trim(), item: currentSat, token: ADMIN_TOKEN }) });
+          const result = await res.json();
+          if (result.status === "sent") { alert("¡Correo enviado con éxito!"); setIsEmailModalOpen(false); setEmailRecipients(''); }
+          else { alert("Error: " + (result.message || "No autorizado")); }
+        } catch (err) { alert("Error de red al enviar el correo."); } finally { setSendingEmail(false); }
+      };
+
+      const filteredItems = items.filter(item => {
+        const matchYear = String(item.year) === String(selectedYear);
+        const matchQuarter = selectedQuarter === 'Todos' || item.quarter === selectedQuarter;
+        const matchType = selectedType === 'Todos' || item.type === selectedType;
+        const q = searchTerm.toLowerCase();
+        const matchSearch = (item.title || "").toLowerCase().includes(q) || (item.objective && item.objective.toLowerCase().includes(q)) || (item.leader && item.leader.toLowerCase().includes(q));
+        return matchYear && matchQuarter && matchType && matchSearch;
+      });
+
+      const saturdaysList = filteredItems.filter(i => i.type === 'Servicio');
+
+      const getTypeBadge = (type) => {
+        switch (type) {
+          case 'Servicio': return <span className="bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2.5 py-0.5 rounded-full text-xs font-semibold flex items-center gap-1"><Sparkles className="w-3 h-3 text-purple-400" /> Servicio</span>;
+          case 'Actividad': return <span className="bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 px-2.5 py-0.5 rounded-full text-xs font-semibold flex items-center gap-1"><Gamepad2 className="w-3 h-3 text-cyan-400" /> Actividad</span>;
+          case 'Evento Especial': return <span className="bg-pink-500/20 text-pink-300 border border-pink-500/40 px-2.5 py-0.5 rounded-full text-xs font-semibold flex items-center gap-1"><Zap className="w-3 h-3 text-pink-400" /> Evento Especial</span>;
+          default: return null;
+        }
+      };
+
+      // --- LOGIN ---
+      if (!userRole) {
+        return (
+          <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+            <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-6">
+              <div className="text-center space-y-2">
+                <div className="w-16 h-16 mx-auto rounded-xl bg-gradient-to-tr from-purple-600 via-pink-500 to-cyan-400 p-0.5 shadow-lg">
+                  <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center"><Sparkles className="w-8 h-8 text-pink-500 animate-pulse" /></div>
+                </div>
+                <h1 className="text-2xl font-black bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">Planificación SAINTS</h1>
+                <p className="text-slate-400 text-sm">Selecciona tu modo de acceso</p>
+              </div>
+              <div className="space-y-3">
+                <button onClick={() => handleLogin('guest')} className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl border border-slate-700 transition flex items-center justify-center gap-2"><User className="w-4 h-4" /> Entrar como Invitado (Solo Ver)</button>
+                <div className="relative flex py-2 items-center"><div className="flex-grow border-t border-slate-800"></div><span className="flex-shrink-0 mx-4 text-slate-600 text-xs">ACCESO RESTRINGIDO</span><div className="flex-grow border-t border-slate-800"></div></div>
+                <div className="space-y-3">
+                  <input type="password" placeholder="Clave de Administrador" value={loginPassword} onChange={(e) => { setLoginPassword(e.target.value); setLoginError(''); }} onKeyDown={(e) => e.key === 'Enter' && handleLogin('admin')} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-slate-100 focus:outline-none focus:border-purple-500 text-sm" />
+                  {loginError && <p className="text-rose-400 text-xs text-center font-semibold">{loginError}</p>}
+                  <button onClick={() => handleLogin('admin')} className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-90 text-white font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-lg"><Lock className="w-4 h-4" /> Entrar como Administrador</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // --- CARGA ---
+      if (isLoading) {
+        return (
+          <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+            <div className="absolute inset-0 overflow-hidden">
+              <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl animate-pulse"></div>
+              <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-pink-600/20 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
+              <div className="absolute top-1/2 left-1/2 w-96 h-96 bg-cyan-600/20 rounded-full blur-3xl animate-pulse" style={{animationDelay: '2s'}}></div>
+            </div>
+            <div className="relative z-10 flex flex-col items-center space-y-8">
+              <div className="relative">
+                <div className="w-24 h-24 rounded-2xl bg-gradient-to-tr from-purple-600 via-pink-500 to-cyan-400 p-1 shadow-2xl shadow-purple-500/50" style={{animation: 'spin 3s linear infinite'}}>
+                  <div className="w-full h-full bg-slate-950 rounded-xl flex items-center justify-center"><Sparkles className="w-12 h-12 text-pink-500 animate-pulse" /></div>
+                </div>
+                <div className="absolute inset-0 w-24 h-24 rounded-2xl border-2 border-purple-500/30 animate-ping" style={{animationDuration: '2s'}}></div>
+                <div className="absolute inset-0 w-24 h-24 rounded-2xl border-2 border-pink-500/30 animate-ping" style={{animationDuration: '2s', animationDelay: '0.5s'}}></div>
+              </div>
+              <div className="text-center space-y-2">
+                <h1 className="text-3xl font-black bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">Planificación SAINTS</h1>
+                <p className="text-slate-400 text-sm">Conectando con Google Sheets</p>
+              </div>
+              <div className="w-64 h-1 bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-purple-600 via-pink-500 to-cyan-400 rounded-full animate-loading-bar"></div></div>
+              <div className="text-xs text-slate-500 font-medium"><LoadingMessages /></div>
+            </div>
+          </div>
+        );
+      }
+
+      // --- ERROR ---
+      if (connectionError) {
+        return (
+          <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-center p-6">
+            <div className="w-16 h-16 bg-rose-500/20 rounded-full flex items-center justify-center mb-4"><X className="w-8 h-8 text-rose-500" /></div>
+            <h1 className="text-2xl font-bold text-white mb-2">Error de Conexión</h1>
+            <p className="text-slate-400 max-w-md mb-6">No se pudo conectar. Verifica la URL del script y permisos.</p>
+            <button onClick={loadFromSheets} className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition">Reintentar</button>
+            <button onClick={() => { setUserRole(null); setConnectionError(false); }} className="mt-4 text-slate-500 hover:text-white text-sm underline">Volver al Login</button>
+          </div>
+        );
+      }
+
+      // --- APP PRINCIPAL ---
+      return (
+        <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-pink-500 selection:text-white transition-colors duration-300">
+          {isPrintView ? (
+            <div className="printable-area p-8 bg-white text-slate-900 min-h-screen">
+              <div className="flex justify-between items-center border-b-2 border-purple-600 pb-4 mb-6 no-print">
+                <div><h1 className="text-3xl font-extrabold text-purple-900">Planificación SAINTS</h1><p className="text-slate-600 font-medium">Vista de Impresión - {selectedYear}</p></div>
+                <button onClick={() => setIsPrintView(false)} className="px-4 py-2 bg-slate-900 text-white rounded-lg font-bold hover:bg-slate-800 transition">Volver</button>
+              </div>
+              <div className="grid grid-cols-1 gap-4">
+                {filteredItems.map(item => (
+                  <div key={item.id} className="border border-slate-300 rounded-xl p-4 bg-slate-50 break-inside-avoid">
+                    <div className="flex justify-between items-start">
+                      <div><h3 className="text-lg font-bold text-slate-900">{item.title}</h3><p className="text-sm text-slate-600">{item.date} • {item.type}</p></div>
+                      <span className="text-xs font-bold bg-slate-200 px-2 py-1 rounded">{item.quarter}</span>
+                    </div>
+                    {item.objective && <p className="text-sm text-slate-700 mt-2 italic">"{item.objective}"</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col min-h-screen no-print-area">
+              {/* HEADER */}
+              <header className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-4 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 via-pink-500 to-cyan-400 p-0.5 shadow-lg shadow-purple-500/20">
+                    <div className="w-full h-full bg-white dark:bg-slate-950 rounded-[10px] flex items-center justify-center"><Sparkles className="w-5 h-5 text-pink-500 dark:text-pink-400 animate-pulse" /></div>
+                  </div>
+                  <div>
+                    <h1 className="text-xl lg:text-2xl font-black tracking-wider bg-gradient-to-r from-purple-600 via-pink-500 to-cyan-500 dark:from-purple-400 dark:via-pink-400 dark:to-cyan-400 bg-clip-text text-transparent">Planificación SAINTS</h1>
+                    <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
+                      <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>Conectado a Google Sheets</span>
+                      <span className={`ml-2 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${userRole === 'admin' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : 'bg-slate-700 text-slate-300'}`}>{userRole === 'admin' ? 'Administrador' : 'Invitado'}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center">
+                    {['2026', '2027'].map(year => (
+                      <button key={year} onClick={() => setSelectedYear(year)} className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${selectedYear === year ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>Año {year}</button>
+                    ))}
+                  </div>
+                  <button onClick={() => setDarkMode(!darkMode)} className="p-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl border border-slate-200 dark:border-slate-700 transition">
+                    {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-purple-700" />}
+                  </button>
+                  {/* 🖨️ BOTÓN IMPRIMIR / PDF */}
+                  <button onClick={handlePrint} className="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-2 transition">
+                    <Printer className="w-4 h-4 text-cyan-500 dark:text-cyan-400" />
+                    <span className="hidden sm:inline">Imprimir</span>
+                  </button>
+                  {userRole === 'admin' && (
+                    <button onClick={() => openNewItemModal('Servicio')} className="px-4 py-2 bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-600 hover:opacity-95 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-pink-500/20 transition transform active:scale-95">
+                      <Plus className="w-4 h-4" /> <span>Agregar</span>
+                    </button>
+                  )}
+                  <button onClick={() => setUserRole(null)} className="p-2.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 rounded-xl border border-rose-500/30 transition" title="Cerrar Sesión">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </header>
+
+              {/* NAVEGACIÓN */}
+              <div className="bg-slate-100/70 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800/50 px-4 lg:px-8 py-2.5 flex flex-wrap items-center justify-between gap-4">
+                <nav className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+                  {[
+                    { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+                    { id: 'weekly', icon: CalendarDays, label: 'Programa Sábado' },
+                    { id: 'quarterly', icon: Layers, label: 'Plan Trimestral' },
+                    { id: 'annual', icon: Calendar, label: 'Cronograma Anual' }
+                  ].map(tab => (
+                    <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition ${activeTab === tab.id ? 'bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-500/30' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'}`}>
+                      <tab.icon className="w-4 h-4" /> {tab.label}
+                    </button>
+                  ))}
+                </nav>
+                <div className="flex items-center gap-2 text-xs w-full sm:w-auto">
+                  <div className="relative flex-1 sm:w-48">
+                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+                    <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-slate-900 dark:text-slate-200 focus:outline-none focus:border-purple-500 text-xs" />
+                  </div>
+                  <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)} className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-700 dark:text-slate-300 focus:outline-none focus:border-purple-500 text-xs">
+                    <option value="Todos">Todos</option>
+                    <option value="Servicio">Servicio</option>
+                    <option value="Actividad">Actividad</option>
+                    <option value="Evento Especial">Evento Especial</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* CONTENIDO */}
+              <main className="flex-1 p-4 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
+
+                {/* DASHBOARD */}
+                {activeTab === 'dashboard' && (
+                  <div className="space-y-6">
+                    {/* 🎯 TARJETAS MEJORADAS */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="bg-gradient-to-br from-purple-900/40 to-slate-900/80 border border-purple-500/30 rounded-2xl p-5 relative overflow-hidden group hover:border-purple-500/60 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/20">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl group-hover:bg-purple-500/20 transition-all duration-500"></div>
+                        <div className="flex items-center justify-between mb-3 relative z-10">
+                          <span className="text-xs font-semibold text-purple-300 uppercase tracking-wider">Total Programaciones</span>
+                          <div className="w-10 h-10 rounded-lg bg-purple-500/20 border border-purple-500/40 flex items-center justify-center"><Sparkles className="w-5 h-5 text-purple-400" /></div>
+                        </div>
+                        <p className="text-4xl font-black text-white mt-1 relative z-10">{filteredItems.length}</p>
+                        <span className="text-[11px] text-purple-400 font-medium mt-2 block relative z-10">Planificadas para {selectedYear}</span>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-cyan-900/40 to-slate-900/80 border border-cyan-500/30 rounded-2xl p-5 relative overflow-hidden group hover:border-cyan-500/60 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-cyan-500/20">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl group-hover:bg-cyan-500/20 transition-all duration-500"></div>
+                        <div className="flex items-center justify-between mb-3 relative z-10">
+                          <span className="text-xs font-semibold text-cyan-300 uppercase tracking-wider">Servicios de Sábado</span>
+                          <div className="w-10 h-10 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center"><CalendarDays className="w-5 h-5 text-cyan-400" /></div>
+                        </div>
+                        <p className="text-4xl font-black text-white mt-1 relative z-10">{saturdaysList.length}</p>
+                        <span className="text-[11px] text-cyan-400 font-medium mt-2 block relative z-10">Con programa estructurado</span>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-pink-900/40 to-slate-900/80 border border-pink-500/30 rounded-2xl p-5 relative overflow-hidden group hover:border-pink-500/60 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-pink-500/20">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-pink-500/10 rounded-full blur-2xl group-hover:bg-pink-500/20 transition-all duration-500"></div>
+                        <div className="flex items-center justify-between mb-3 relative z-10">
+                          <span className="text-xs font-semibold text-pink-300 uppercase tracking-wider">Eventos Especiales</span>
+                          <div className="w-10 h-10 rounded-lg bg-pink-500/20 border border-pink-500/40 flex items-center justify-center"><Zap className="w-5 h-5 text-pink-400" /></div>
+                        </div>
+                        <p className="text-4xl font-black text-white mt-1 relative z-10">{filteredItems.filter(i => i.type === 'Evento Especial').length}</p>
+                        <span className="text-[11px] text-pink-400 font-medium mt-2 block relative z-10">Campamentos, retiros, noches</span>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-emerald-900/40 to-slate-900/80 border border-emerald-500/30 rounded-2xl p-5 relative overflow-hidden group hover:border-emerald-500/60 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-emerald-500/20">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all duration-500"></div>
+                        <div className="flex items-center justify-between mb-3 relative z-10">
+                          <span className="text-xs font-semibold text-emerald-300 uppercase tracking-wider">Actividades & Salidas</span>
+                          <div className="w-10 h-10 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center"><Gamepad2 className="w-5 h-5 text-emerald-400" /></div>
+                        </div>
+                        <p className="text-4xl font-black text-white mt-1 relative z-10">{filteredItems.filter(i => i.type === 'Actividad').length}</p>
+                        <span className="text-[11px] text-emerald-400 font-medium mt-2 block relative z-10">Deportes, picnics, integraciones</span>
+                      </div>
+                    </div>
+
+                    {/* SECCIÓN PRÓXIMO SERVICIO Y ACTIVIDADES */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      <div className="lg:col-span-2 bg-white dark:bg-gradient-to-b dark:from-slate-900 dark:to-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-lg font-extrabold flex items-center gap-2 text-slate-900 dark:text-white">
+                            <Sparkles className="w-5 h-5 text-purple-600 dark:text-purple-400" /> Próximo Servicio Destacado ({selectedYear})
+                          </h3>
+                          <button onClick={() => setActiveTab('weekly')} className="text-xs text-purple-600 dark:text-purple-400 font-bold flex items-center gap-1">Ver todos <ChevronRight className="w-3.5 h-3.5" /></button>
+                        </div>
+                        {saturdaysList.length > 0 ? (
+                          <div className="bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl p-5 space-y-4">
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
+                              <div>
+                                <span className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest">{saturdaysList[0].date} • {saturdaysList[0].quarter}</span>
+                                <h4 className="text-xl font-black text-slate-900 dark:text-white mt-0.5">{saturdaysList[0].title}</h4>
+                              </div>
+                              <span className="text-xs bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1 rounded-full">Líder: {saturdaysList[0].leader || 'No asignado'}</span>
+                            </div>
+                            {saturdaysList[0].objective && (
+                              <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-500/20 rounded-lg p-3 text-xs text-purple-800 dark:text-purple-200">
+                                <strong className="text-purple-700 dark:text-purple-400 flex items-center gap-1.5 mb-1 font-bold"><Target className="w-3.5 h-3.5" /> Objetivo del Servicio:</strong>
+                                {saturdaysList[0].objective}
+                              </div>
+                            )}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs pt-2">
+                              <div className="bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800">
+                                <span className="text-purple-600 dark:text-purple-400 font-bold flex items-center gap-1"><Music className="w-3 h-3"/> Alabanza</span>
+                                <p className="text-slate-700 dark:text-slate-300 font-medium truncate mt-1">{saturdaysList[0].saturdayProgram?.worship?.title || 'Programado'}</p>
+                                <span className="text-[10px] text-slate-500">{saturdaysList[0].saturdayProgram?.worship?.duration}</span>
+                              </div>
+                              <div className="bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800">
+                                <span className="text-cyan-600 dark:text-cyan-400 font-bold flex items-center gap-1"><Gamepad2 className="w-3 h-3"/> Dinámica</span>
+                                <p className="text-slate-700 dark:text-slate-300 font-medium truncate mt-1">{saturdaysList[0].saturdayProgram?.icebreaker?.title || 'Programado'}</p>
+                                <span className="text-[10px] text-slate-500">{saturdaysList[0].saturdayProgram?.icebreaker?.duration}</span>
+                              </div>
+                              <div className="bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800">
+                                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1"><BookOpen className="w-3 h-3"/> Mensaje</span>
+                                <p className="text-slate-700 dark:text-slate-300 font-medium truncate mt-1">{saturdaysList[0].saturdayProgram?.message?.title || 'Programado'}</p>
+                                <span className="text-[10px] text-slate-500">{saturdaysList[0].saturdayProgram?.message?.duration}</span>
+                              </div>
+                              <div className="bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800">
+                                <span className="text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1"><Coffee className="w-3 h-3"/> Compartir</span>
+                                <p className="text-slate-700 dark:text-slate-300 font-medium truncate mt-1">{saturdaysList[0].saturdayProgram?.snack?.title || 'Programado'}</p>
+                                <span className="text-[10px] text-slate-500">{saturdaysList[0].saturdayProgram?.snack?.duration}</span>
+                              </div>
+                            </div>
+                            <div className="flex justify-end pt-2">
+                              <button onClick={() => { setSelectedSaturdayItem(saturdaysList[0]); setActiveTab('weekly'); }} className="px-3.5 py-1.5 bg-purple-600/30 hover:bg-purple-600/40 text-purple-700 dark:text-purple-300 rounded-lg text-xs font-bold border border-purple-500/40 transition">Ver Programa Completo →</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-center py-12 text-slate-500 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">No hay servicios registrados para el año {selectedYear}.</div>
+                        )}
+                      </div>
+
+                      <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+                        <h3 className="text-lg font-extrabold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                          <Zap className="w-5 h-5 text-pink-500 dark:text-pink-400" /> Actividades & Eventos {selectedYear}
+                        </h3>
+                        <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
+                          {filteredItems.filter(i => i.type !== 'Servicio').length > 0 ? (
+                            filteredItems.filter(i => i.type !== 'Servicio').map(event => (
+                              <div key={event.id} className="p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl">
+                                <div className="flex items-center justify-between mb-1">
+                                  {getTypeBadge(event.type)}
+                                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">{event.date}</span>
+                                </div>
+                                <h4 className="font-bold text-slate-800 dark:text-slate-200 text-sm">{event.title}</h4>
+                                {event.leader && <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Encargado: {event.leader}</p>}
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-xs text-slate-500 text-center py-8">Sin eventos en este período.</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* WEEKLY */}
+                {activeTab === 'weekly' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <div className="lg:col-span-4 space-y-3">
+                      <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-1">Sábados Planificados</h3>
+                      <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
+                        {saturdaysList.map(sat => {
+                          const isSelected = (selectedSaturdayItem?.id || saturdaysList[0]?.id) === sat.id;
+                          return (
+                            <div key={sat.id} onClick={() => setSelectedSaturdayItem(sat)} className={`p-4 rounded-xl border cursor-pointer transition-all ${isSelected ? 'bg-purple-50 dark:bg-gradient-to-r dark:from-purple-950/60 dark:to-slate-900 border-purple-500 shadow-sm' : 'bg-white dark:bg-slate-900/70 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900'}`}>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs font-extrabold text-purple-600 dark:text-purple-400">{sat.date}</span>
+                                <span className="text-[10px] bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-400 px-2 py-0.5 rounded font-mono">{sat.quarter}</span>
+                              </div>
+                              <h4 className="font-bold text-slate-900 dark:text-white text-sm">{sat.title}</h4>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">Líder: {sat.leader || 'Por asignar'}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="lg:col-span-8">
+                      {(() => {
+                        const currentSat = selectedSaturdayItem || saturdaysList[0];
+                        if (!currentSat) return <div className="text-center py-12 text-slate-500">Selecciona un sábado.</div>;
+                        const prog = currentSat.saturdayProgram || {};
+                        return (
+                          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-6 shadow-sm">
+                            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
+                              <div>
+                                <span className="text-xs font-bold bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 border border-purple-300 dark:border-purple-500/30 px-2.5 py-0.5 rounded-full">{currentSat.date} • {currentSat.quarter}</span>
+                                <h3 className="text-2xl font-black text-slate-900 dark:text-white mt-1">{currentSat.title}</h3>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Líder General: <strong className="text-slate-700 dark:text-slate-200">{currentSat.leader || 'No especificado'}</strong></p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {userRole === 'admin' && (
+                                  <>
+                                    <button onClick={() => setIsEmailModalOpen(true)} className="px-3 py-2 bg-pink-100 hover:bg-pink-200 dark:bg-pink-600/20 dark:hover:bg-pink-600/30 text-pink-700 dark:text-pink-300 border border-pink-300 dark:border-pink-500/40 rounded-lg text-xs font-bold flex items-center gap-1.5 transition">
+                                      <Mail className="w-3.5 h-3.5 text-pink-600 dark:text-pink-400" /> Enviar Correo
+                                    </button>
+                                    <button onClick={() => openEditModal(currentSat)} className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold flex items-center gap-1">
+                                      <Edit3 className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" /> Editar
+                                    </button>
+                                    <button onClick={() => handleDeleteItem(currentSat.id)} className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-slate-700 dark:text-rose-400 rounded-lg text-xs font-bold">
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="bg-slate-50 dark:bg-slate-950 border border-purple-200 dark:border-purple-500/30 rounded-xl p-4 space-y-2">
+                                <div className="flex justify-between border-b border-slate-200 dark:border-slate-800 pb-2 text-xs"><span className="font-bold text-purple-700 dark:text-purple-400 flex items-center gap-1.5"><Music className="w-4 h-4" /> 1. Alabanzas</span><span className="text-slate-500 flex items-center gap-1"><Clock className="w-3 h-3" /> {prog.worship?.duration || '20 min'}</span></div>
+                                <h5 className="font-bold text-slate-800 dark:text-slate-200 text-sm">{prog.worship?.title}</h5>
+                                <p className="text-xs text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900 p-2.5 rounded border border-slate-200 dark:border-slate-800">{prog.worship?.details || 'Sin detalles'}</p>
+                                <p className="text-[11px] text-purple-600 dark:text-purple-300">Líder: {prog.worship?.leader || 'Por asignar'}</p>
+                              </div>
+                              <div className="bg-slate-50 dark:bg-slate-950 border border-cyan-200 dark:border-cyan-500/30 rounded-xl p-4 space-y-2">
+                                <div className="flex justify-between border-b border-slate-200 dark:border-slate-800 pb-2 text-xs"><span className="font-bold text-cyan-700 dark:text-cyan-400 flex items-center gap-1.5"><Gamepad2 className="w-4 h-4" /> 2. Dinámica</span><span className="text-slate-500 flex items-center gap-1"><Clock className="w-3 h-3" /> {prog.icebreaker?.duration || '15 min'}</span></div>
+                                <h5 className="font-bold text-slate-800 dark:text-slate-200 text-sm">{prog.icebreaker?.title}</h5>
+                                <p className="text-xs text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900 p-2.5 rounded border border-slate-200 dark:border-slate-800">{prog.icebreaker?.details || 'Sin detalles'}</p>
+                                <p className="text-[11px] text-cyan-600 dark:text-cyan-300">Encargado: {prog.icebreaker?.leader || 'Por asignar'}</p>
+                              </div>
+                              <div className="bg-slate-50 dark:bg-slate-950 border border-emerald-200 dark:border-emerald-500/30 rounded-xl p-4 space-y-2">
+                                <div className="flex justify-between border-b border-slate-200 dark:border-slate-800 pb-2 text-xs"><span className="font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5"><BookOpen className="w-4 h-4" /> 3. Mensaje</span><span className="text-slate-500 flex items-center gap-1"><Clock className="w-3 h-3" /> {prog.message?.duration || '30 min'}</span></div>
+                                <h5 className="font-bold text-slate-800 dark:text-slate-200 text-sm">{prog.message?.title}</h5>
+                                <p className="text-xs text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900 p-2.5 rounded border border-slate-200 dark:border-slate-800">{prog.message?.details || 'Sin detalles'}</p>
+                                <p className="text-[11px] text-emerald-600 dark:text-emerald-300">Predicador: {prog.message?.speaker || 'Por asignar'}</p>
+                              </div>
+                              <div className="bg-slate-50 dark:bg-slate-950 border border-amber-200 dark:border-amber-500/30 rounded-xl p-4 space-y-2">
+                                <div className="flex justify-between border-b border-slate-200 dark:border-slate-800 pb-2 text-xs"><span className="font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5"><Coffee className="w-4 h-4" /> 4. Compartir</span><span className="text-slate-500 flex items-center gap-1"><Clock className="w-3 h-3" /> {prog.snack?.duration || '20 min'}</span></div>
+                                <h5 className="font-bold text-slate-800 dark:text-slate-200 text-sm">{prog.snack?.title}</h5>
+                                <p className="text-xs text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900 p-2.5 rounded border border-slate-200 dark:border-slate-800">{prog.snack?.details || 'Sin detalles'}</p>
+                                <p className="text-[11px] text-amber-600 dark:text-amber-300">Equipo: {prog.snack?.team || 'Por asignar'}</p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* QUARTERLY */}
+                {activeTab === 'quarterly' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {['Q1', 'Q2', 'Q3', 'Q4'].map(q => {
+                      const quarterItems = filteredItems.filter(i => i.quarter === q);
+                      return (
+                        <div key={q} className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-3 shadow-sm">
+                          <div className="flex justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                            <h3 className="text-lg font-black text-slate-900 dark:text-white">Trimestre {q}</h3>
+                            <span className="text-xs text-slate-500 dark:text-slate-400">{quarterItems.length} Programaciones</span>
+                          </div>
+                          {quarterItems.length > 0 ? (
+                            quarterItems.map(item => (
+                              <div key={item.id} className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl space-y-2">
+                                <div className="flex justify-between">
+                                  {getTypeBadge(item.type)}
+                                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400">{item.date}</span>
+                                </div>
+                                <h4 className="font-extrabold text-slate-900 dark:text-white">{item.title}</h4>
+                                {item.objective && <p className="text-xs text-slate-600 dark:text-slate-300 italic">"{item.objective}"</p>}
+                                <div className="flex justify-between pt-2 border-t border-slate-200 dark:border-slate-900 text-xs text-slate-500">
+                                  <span>Líder: <strong className="text-slate-700 dark:text-slate-200">{item.leader || 'Por asignar'}</strong></span>
+                                  <div className="flex gap-2">
+                                    {userRole === 'admin' && (
+                                      <>
+                                        <button onClick={() => openEditModal(item)} className="hover:text-purple-600 dark:hover:text-purple-400"><Edit3 className="w-3.5 h-3.5" /></button>
+                                        <button onClick={() => handleDeleteItem(item.id)} className="hover:text-rose-600 dark:hover:text-rose-400"><Trash2 className="w-3.5 h-3.5" /></button>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-center py-8 text-slate-400 text-xs">Sin eventos en este trimestre.</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* ANNUAL */}
+                {activeTab === 'annual' && (
+                  <div className="bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+                    <div className="relative border-l-2 border-slate-200 dark:border-slate-800 ml-4 space-y-6 py-2">
+                      {filteredItems.length > 0 ? (
+                        filteredItems.map(item => (
+                          <div key={item.id} className="relative pl-6">
+                            <div className="absolute -left-[9px] top-1.5 w-4 h-4 rounded-full bg-white dark:bg-slate-950 border-2 border-purple-600"></div>
+                            <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-4 rounded-xl">
+                              <div className="flex justify-between mb-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-black text-slate-900 dark:text-white bg-slate-200 dark:bg-slate-800 px-2.5 py-1 rounded">{item.date}</span>
+                                  {getTypeBadge(item.type)}
+                                </div>
+                                <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">{item.quarter}</span>
+                              </div>
+                              <h4 className="text-base font-bold text-slate-900 dark:text-white mt-1">{item.title}</h4>
+                              {item.objective && <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{item.objective}</p>}
+                              {userRole === 'admin' && (
+                                <div className="flex gap-3 mt-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+                                  <button onClick={() => openEditModal(item)} className="text-xs text-purple-600 dark:text-purple-400 font-bold flex items-center gap-1"><Edit3 className="w-3.5 h-3.5" /> Editar</button>
+                                  <button onClick={() => handleDeleteItem(item.id)} className="text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-1"><Trash2 className="w-3.5 h-3.5" /> Eliminar</button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-12 text-slate-500 text-xs">Sin elementos en la línea de tiempo.</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </main>
+
+              {/* MODAL CORREO */}
+              {isEmailModalOpen && userRole === 'admin' && (
+                <div className="fixed inset-0 z-50 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-md rounded-2xl p-6 space-y-4 shadow-2xl">
+                    <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-pink-500" /> Enviar Programa por Gmail
+                    </h3>
+                    <form onSubmit={handleSendEmail} className="space-y-4 text-xs">
+                      <input required type="email" placeholder="correos@gmail.com" value={emailRecipients} onChange={e => setEmailRecipients(e.target.value)} className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-900 dark:text-slate-100" />
+                      <div className="flex justify-end gap-2">
+                        <button type="button" onClick={() => setIsEmailModalOpen(false)} className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold">Cancelar</button>
+                        <button type="submit" disabled={sendingEmail} className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-xl">{sendingEmail ? "Enviando..." : "Enviar Correo"}</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* MODAL CREAR/EDITAR */}
+              {isModalOpen && userRole === 'admin' && (
+                <div className="fixed inset-0 z-50 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 w-full max-w-2xl rounded-2xl p-6 space-y-5 my-8 shadow-2xl">
+                    <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                      <h3 className="text-lg font-black text-slate-900 dark:text-white">{editingItem ? 'Editar Programación' : 'Agregar Nueva Programación'}</h3>
+                      <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-700 dark:hover:text-white"><X className="w-5 h-5" /></button>
+                    </div>
+                    <form onSubmit={handleSaveItem} className="space-y-4 text-xs">
+                      <input required type="text" placeholder="Título" value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100" />
+                      <div className="grid grid-cols-2 gap-4">
+                        <input required type="date" value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100" />
+                        <input required type="text" placeholder="Líder General" value={formData.leader} onChange={e => setFormData({ ...formData, leader: e.target.value })} className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100" />
+                      </div>
+                      <input required type="text" placeholder="Objetivo del Servicio" value={formData.objective} onChange={e => setFormData({ ...formData, objective: e.target.value })} className="w-full bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-100" />
+                      {formData.type === 'Servicio' && (
+                        <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+                          <p className="text-xs font-bold text-purple-600 dark:text-purple-400">Programa del Sábado</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <input placeholder="Alabanza: Líder" value={formData.saturdayProgram.worship.leader} onChange={e => setFormData({...formData, saturdayProgram: {...formData.saturdayProgram, worship: {...formData.saturdayProgram.worship, leader: e.target.value}}})} className="bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded px-2 py-1" />
+                            <input placeholder="Alabanza: Detalles" value={formData.saturdayProgram.worship.details} onChange={e => setFormData({...formData, saturdayProgram: {...formData.saturdayProgram, worship: {...formData.saturdayProgram.worship, details: e.target.value}}})} className="bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded px-2 py-1" />
+                            <input placeholder="Dinámica: Líder" value={formData.saturdayProgram.icebreaker.leader} onChange={e => setFormData({...formData, saturdayProgram: {...formData.saturdayProgram, icebreaker: {...formData.saturdayProgram.icebreaker, leader: e.target.value}}})} className="bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded px-2 py-1" />
+                            <input placeholder="Dinámica: Detalles" value={formData.saturdayProgram.icebreaker.details} onChange={e => setFormData({...formData, saturdayProgram: {...formData.saturdayProgram, icebreaker: {...formData.saturdayProgram.icebreaker, details: e.target.value}}})} className="bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded px-2 py-1" />
+                            <input placeholder="Mensaje: Predicador" value={formData.saturdayProgram.message.speaker} onChange={e => setFormData({...formData, saturdayProgram: {...formData.saturdayProgram, message: {...formData.saturdayProgram.message, speaker: e.target.value}}})} className="bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded px-2 py-1" />
+                            <input placeholder="Mensaje: Detalles" value={formData.saturdayProgram.message.details} onChange={e => setFormData({...formData, saturdayProgram: {...formData.saturdayProgram, message: {...formData.saturdayProgram.message, details: e.target.value}}})} className="bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded px-2 py-1" />
+                            <input placeholder="Compartir: Equipo" value={formData.saturdayProgram.snack.team} onChange={e => setFormData({...formData, saturdayProgram: {...formData.saturdayProgram, snack: {...formData.saturdayProgram.snack, team: e.target.value}}})} className="bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded px-2 py-1" />
+                            <input placeholder="Compartir: Detalles" value={formData.saturdayProgram.snack.details} onChange={e => setFormData({...formData, saturdayProgram: {...formData.saturdayProgram, snack: {...formData.saturdayProgram.snack, details: e.target.value}}})} className="bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded px-2 py-1" />
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+                        <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold">Cancelar</button>
+                        <button type="submit" className="px-5 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-xl">Guardar</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    try {
+      ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    } catch (err) {
+      console.error("Error al renderizar React:", err);
+      const errorDiv = document.getElementById('error-boundary');
+      const errorMsg = document.getElementById('error-message');
+      if (errorDiv && errorMsg) {
+        errorDiv.classList.remove('hidden');
+        errorMsg.textContent = "Error fatal de React: " + err.message;
+      }
+    }
+  </script>
+</body>
+</html>
